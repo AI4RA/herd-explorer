@@ -55,11 +55,22 @@ Each new survey year needs one edit to `pipeline/release.yml` and two workflow r
 - [Perspective](https://github.com/perspective-dev/perspective) (Apache 2.0): the Table tab on the Explore page
 - [marked](https://github.com/markedjs/marked) (MIT) and [DOMPurify](https://github.com/cure53/DOMPurify) (Apache 2.0 or MPL 2.0): rendering answers on the Ask page
 - Google Gen AI SDK and Anthropic SDK (Apache 2.0): loaded only on the Ask page, only for those providers' keys
+- [GoatCounter](https://www.goatcounter.com) (EUPL 1.2; its count script is ISC): visit counts, see below
 - Offline, in R: duckdb, readxl, mgcv, scoringRules, writexl
 
 ## Ask the data
 
 The Ask page lets you ask questions in plain language. Bring your own key: a University of Idaho MindRouter key (`mr2_...`), or an Anthropic, OpenAI or Google Gemini key. Paste it on the page, or open any page from a link ending in `?key=...` (for example the site root or `ask.html?key=...`); the key is read once, removed from the address bar, and kept only in that browser tab. The model writes SQL that runs read-only in your browser; only your question and the query results go to the provider you chose. When you ask for help using the site or about the methods, the model starts from a table of contents and reads only the help documents it needs from [`docs/help/`](docs/help/), which are then sent too.
+
+## Visit counts
+
+The site counts visits with [GoatCounter](https://www.goatcounter.com), a hosted, open-source counter that sets no cookies and stores no IP addresses or personal data. It keeps only totals: page views, browser, operating system, screen size, country and referring site.
+
+- **What is sent.** Only the page's path (`location.pathname`), never the query string or anchor, so a key passed in a `?key=` link never reaches GoatCounter. The counter loads after the page has removed the key from the address bar.
+- **Where it is.** `countVisit()` in [`docs/js/layout.js`](docs/js/layout.js), which every page calls through `renderLayout()`. The script is GoatCounter's versioned `count.v5.js`, pinned with a subresource integrity hash. To move to a newer version, change `GOATCOUNTER_JS` and `GOATCOUNTER_SRI` together (GoatCounter lists the hashes under "Use SRI with count.js?" in its documentation).
+- **Dashboard.** <https://herd-explorer.goatcounter.com> (sign-in required). It is the `herd-explorer` site in the AI4RA GoatCounter account, which holds one site per app. The counts follow the site code, not the domain, so they carry on if the site moves.
+- **Gaps.** Ad blockers often block GoatCounter, so the counts are lower than the true number of visits. Visits from `localhost` are not counted, so a local preview never shows up. Switching tabs within a page (such as Explore's Table, Chart builder and Animate tabs) is not counted separately.
+- **On the site.** The footer and the site overview help ([`docs/help/site-overview.md`](docs/help/site-overview.md)) say what is collected.
 
 ## License
 
