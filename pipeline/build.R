@@ -57,13 +57,37 @@ fetch <- function(url, dest) {
   dest
 }
 
-# Extract the single CSV in an NCSES zip and return its path
+# Extract the single CSV in an NCSES zip and return its path.
+# NCSES zips also carry the same data as a SAS file. Its CSV export has been cut off at least once
+# (FY 2020, re-posted September 2026: 6,387 of about 242,000 rows), so the CSV's row count is
+# checked against the SAS file. If the CSV is short, the SAS file is written out as the CSV instead,
+# every value as text exactly as stored, and the build says so. Validation then checks it as usual.
 csv_from_zip <- function(zip_path) {
-  csv <- grep("\\.csv$", unzip(zip_path, list = TRUE)$Name, value = TRUE, ignore.case = TRUE)
+  members <- unzip(zip_path, list = TRUE)$Name
+  csv <- grep("\\.csv$", members, value = TRUE, ignore.case = TRUE)
   if (length(csv) != 1) stop(basename(zip_path), ": expected one CSV, found ", paste(csv, collapse = ", "))
   exdir <- sub("\\.zip$", "", zip_path)
   unzip(zip_path, files = csv, exdir = exdir, overwrite = TRUE)
-  file.path(exdir, csv)
+  csv_path <- file.path(exdir, csv)
+  sas <- grep("\\.sas7bdat$", members, value = TRUE, ignore.case = TRUE)
+  if (length(sas) != 1) return(csv_path)
+  unzip(zip_path, files = sas, exdir = exdir, overwrite = TRUE)
+  sas_path <- file.path(exdir, sas)
+  on.exit(unlink(sas_path))
+  csv_rows <- nrow(read.csv(csv_path, colClasses = "character", check.names = FALSE)[, 1, drop = FALSE])
+  x <- haven::read_sas(sas_path)
+  if (csv_rows >= nrow(x)) return(csv_path)
+  message(sprintf("%s: the CSV has %d rows but the SAS file has %d; reading the SAS file instead",
+                  basename(zip_path), csv_rows, nrow(x)))
+  x[] <- lapply(x, function(v) {
+    v <- haven::zap_labels(v)
+    out <- if (is.numeric(v)) format(v, digits = 15, scientific = FALSE, trim = TRUE, drop0trailing = TRUE) else as.character(v)
+    out[is.na(v)] <- ""
+    out
+  })
+  from_sas <- sub("\\.csv$", "_from_sas.csv", csv_path, ignore.case = TRUE)
+  write.csv(x, from_sas, row.names = FALSE, na = "", fileEncoding = "UTF-8")
+  from_sas
 }
 
 files <- do.call(rbind, lapply(first_year:last_year, function(y) {
@@ -98,8 +122,163 @@ selects <- sprintf(
 )
 invisible(dbExecute(con, paste("CREATE TEMP TABLE raw AS", paste(selects, collapse = " UNION ALL BY NAME "))))
 
-invisible(dbExecute(con, "
-  CREATE TABLE facts AS
+# --- Every version of every row NCSES has published -----------------------------------
+# NCSES re-posts every year's microdata with each release, and the re-posted files differ from the
+# earlier ones: values are edited, rows are added, and rows disappear. Nothing NCSES has published is
+# dropped here, and every change is recorded.
+# pipeline/archive/herd_microdata.parquet holds every version of every row the build has seen, as text
+# exactly as NCSES wrote it, with the first and last release it appeared in (first_seen, last_seen: the
+# release's latest survey year). pipeline/archive/releases.csv names the releases. A row is identified
+# by year, form, institution, question, row and column; a new version starts when any other column changes.
+# - The site uses each row's newest version (edits: the newest value wins).
+# - A column the new files no longer have for a year is refilled from the archive.
+# - A row missing from the new files goes to herd_removed with the release it was last published in.
+#   facts and metrics are NCSES's current files, so they can be checked against NCSES's published
+#   totals; the *_with_removed tables add the removed rows back, and the site has a switch to use them.
+#   Rows for an institution-year NCSES now has on the other form are listed but never added back,
+#   since that would count the institution twice in that year.
+# - herd_changes lists every value added, edited or removed between consecutive releases, in survey years the
+#   earlier release already had (a new survey year is not a change).
+# Rebuilding a release gives the same result: versions first seen in this release are dropped and
+# re-derived, and versions last seen in it go back to the previous release before matching.
+archive_path <- file.path(root, "pipeline", "archive", "herd_microdata.parquet")
+releases_path <- file.path(root, "pipeline", "archive", "releases.csv")
+this_release <- release$tables$publication
+this_fy <- as.integer(last_year)
+this_release_label <- sprintf("FY %d release (%s)", last_year, release$tables$label)
+releases <- if (file.exists(releases_path)) read.csv(releases_path, colClasses = c("integer", "character", "character")) else
+  data.frame(release_fy = integer(), publication = character(), label = character())
+releases <- rbind(releases[releases$release_fy != this_fy, ], data.frame(release_fy = this_fy, publication = this_release, label = this_release_label))
+releases <- releases[order(releases$release_fy), ]
+prev_fy <- suppressWarnings(max(releases$release_fy[releases$release_fy < this_fy]))
+dbWriteTable(con, "releases", releases, temporary = TRUE, overwrite = TRUE)
+
+key_cols <- c("year", "form", "inst_id", "questionnaire_no", "row", "column")
+meta_cols <- c("first_seen", "last_seen", "row_key", "sig")
+key_sql <- function(t) sprintf("concat_ws(chr(31), %s)", paste(sprintf("coalesce(%s.\"%s\", '')", t, key_cols), collapse = ", "))
+invisible(dbExecute(con, "ALTER TABLE raw ADD COLUMN row_key VARCHAR"))
+invisible(dbExecute(con, sprintf("UPDATE raw SET row_key = %s", key_sql("raw"))))
+dup <- dbGetQuery(con, "SELECT count(*) AS n FROM (SELECT row_key FROM raw GROUP BY 1 HAVING count(*) > 1)")$n
+if (dup > 0) stop(dup, " HERD rows share a year, form, institution, question, row and column; the archive needs these to be unique")
+
+if (file.exists(archive_path)) {
+  invisible(dbExecute(con, sprintf("CREATE TEMP TABLE archive AS SELECT * EXCLUDE (first_seen, last_seen), first_seen::INTEGER AS first_seen, last_seen::INTEGER AS last_seen, NULL::VARCHAR AS row_key FROM read_parquet('%s')", archive_path)))
+  invisible(dbExecute(con, sprintf("UPDATE archive SET row_key = %s", key_sql("archive"))))
+  # Rebuilding this release: forget what an earlier run of it added
+  invisible(dbExecute(con, sprintf("DELETE FROM archive WHERE first_seen = %d", this_fy)))
+  if (is.finite(prev_fy)) invisible(dbExecute(con, sprintf("UPDATE archive SET last_seen = %d WHERE last_seen = %d", prev_fy, this_fy)))
+} else {
+  message("no HERD archive yet at ", archive_path, "; this build starts one")
+  invisible(dbExecute(con, "CREATE TEMP TABLE archive AS SELECT *, NULL::INTEGER AS first_seen, NULL::INTEGER AS last_seen FROM raw LIMIT 0"))
+}
+# Both tables get every column either has
+data_cols <- setdiff(union(dbListFields(con, "raw"), dbListFields(con, "archive")), c(key_cols, meta_cols))
+for (t in c("raw", "archive")) for (col in setdiff(data_cols, dbListFields(con, t)))
+  invisible(dbExecute(con, sprintf("ALTER TABLE %s ADD COLUMN \"%s\" VARCHAR", t, col)))
+# The newest version of each archived row
+invisible(dbExecute(con, "CREATE TEMP TABLE archive_latest AS SELECT * FROM archive QUALIFY row_number() OVER (PARTITION BY row_key ORDER BY last_seen DESC) = 1"))
+
+# A column the new files no longer have for a year is refilled from the archive
+for (col in data_cols) {
+  gaps <- dbGetQuery(con, sprintf(
+    "SELECT year, form FROM archive_latest GROUP BY ALL HAVING count(\"%1$s\") > 0
+     INTERSECT SELECT year, form FROM raw GROUP BY ALL HAVING count(\"%1$s\") = 0", col))
+  for (i in seq_len(nrow(gaps))) {
+    n <- dbExecute(con, sprintf(
+      "UPDATE raw SET \"%1$s\" = a.\"%1$s\" FROM archive_latest a
+       WHERE raw.row_key = a.row_key AND raw.year = '%2$s' AND raw.form = '%3$s'", col, gaps$year[i], gaps$form[i]))
+    message(sprintf("HERD %s %s form: column %s is missing from the new file; kept it from the archive for %d rows",
+                    gaps$year[i], gaps$form[i], col, n))
+  }
+}
+
+# A version's signature: every column but the key, compared as NCSES wrote it, ignoring how a number
+# was formatted (9863 and 9863.0) and blank versus missing
+sig_sql <- function(t) sprintf("concat_ws(chr(31), coalesce(CAST(TRY_CAST(%1$s.data AS DOUBLE) AS VARCHAR), trim(%1$s.data), ''), %2$s)", t,
+  paste(sprintf("coalesce(trim(%s.\"%s\"), '')", t, setdiff(data_cols, "data")), collapse = ", "))
+for (t in c("raw", "archive")) {
+  invisible(dbExecute(con, sprintf("ALTER TABLE %s ADD COLUMN sig VARCHAR", t)))
+  invisible(dbExecute(con, sprintf("UPDATE %s SET sig = %s", t, sig_sql(t))))
+}
+# Versions still current carry on to this release; anything else in the new files is a new version
+if (is.finite(prev_fy)) invisible(dbExecute(con, sprintf("
+  UPDATE archive SET last_seen = %d
+  WHERE last_seen = %d AND (row_key, sig) IN (SELECT row_key, sig FROM raw)", this_fy, prev_fy)))
+invisible(dbExecute(con, sprintf("
+  INSERT INTO archive BY NAME
+  SELECT r.*, %1$d AS first_seen, %1$d AS last_seen FROM raw r
+  WHERE (r.row_key, r.sig) NOT IN (SELECT row_key, sig FROM archive WHERE last_seen = %1$d)", this_fy)))
+new_versions <- dbGetQuery(con, sprintf("SELECT count(*) AS n FROM archive WHERE first_seen = %d", this_fy))$n
+message(sprintf("HERD archive: %s versions, %s new in the %s", format(dbGetQuery(con, "SELECT count(*) AS n FROM archive")$n, big.mark = ","),
+                format(new_versions, big.mark = ","), this_release_label))
+
+# Rows NCSES no longer publishes: each one's newest version
+invisible(dbExecute(con, sprintf("
+  CREATE TEMP TABLE removed_raw AS
+  SELECT a.* EXCLUDE (first_seen, last_seen, sig),
+    lr.label AS last_seen_label,
+    (SELECT r2.label FROM releases r2 WHERE r2.release_fy > a.last_seen ORDER BY r2.release_fy LIMIT 1) AS missing_since,
+    CASE
+      WHEN NOT EXISTS (SELECT 1 FROM raw r WHERE r.year = a.year AND r.inst_id = a.inst_id) THEN 'Institution-year removed'
+      WHEN NOT EXISTS (SELECT 1 FROM raw r WHERE r.year = a.year AND r.inst_id = a.inst_id AND r.form = a.form) THEN 'Institution-year now on the other form'
+      ELSE 'Row removed'
+    END AS what_changed
+  FROM (SELECT * FROM archive QUALIFY row_number() OVER (PARTITION BY row_key ORDER BY last_seen DESC) = 1) a
+  JOIN releases lr ON lr.release_fy = a.last_seen
+  WHERE a.last_seen < %d", this_fy)))
+gone <- dbGetQuery(con, "SELECT year, count(*) AS n, count(DISTINCT inst_id) AS inst FROM removed_raw GROUP BY ALL ORDER BY ALL")
+if (nrow(gone)) message("HERD rows NCSES no longer publishes, kept from the archive in herd_removed: ",
+                        paste(sprintf("%s %d (%d institutions)", gone$year, gone$n, gone$inst), collapse = "; "))
+
+# Every value added, edited or removed between consecutive releases
+herd_scale_sql <- function(q) sprintf("CASE WHEN %1$s IN ('01.1', '13', '15', '16') THEN 1 ELSE 1000 END", q)
+herd_unit_sql <- function(q) sprintf("CASE %1$s WHEN '01.1' THEN 'code' WHEN '13' THEN 'dollars' WHEN '15' THEN 'headcount' WHEN '16' THEN 'fte' ELSE 'dollars' END", q)
+other_cols <- setdiff(data_cols, c("data", "status"))
+num_sql <- function(t) sprintf("coalesce(CAST(TRY_CAST(%1$s.data AS DOUBLE) AS VARCHAR), trim(%1$s.data), '')", t)
+changed_cols_sql <- sprintf("concat_ws(', ', CASE WHEN %s <> %s THEN 'value' END, CASE WHEN coalesce(trim(o.status), '') <> coalesce(trim(n.status), '') THEN 'status' END, %s)",
+  num_sql("o"), num_sql("n"), paste(sprintf("CASE WHEN coalesce(trim(o.\"%1$s\"), '') <> coalesce(trim(n.\"%1$s\"), '') THEN '%1$s' END", other_cols), collapse = ", "))
+pick <- function(col) sprintf("coalesce(n.\"%1$s\", o.\"%1$s\")", col)
+invisible(dbExecute(con, "CREATE TABLE herd_changes (year INTEGER, inst_id VARCHAR, institution VARCHAR, state VARCHAR, form VARCHAR,
+  question_no VARCHAR, question VARCHAR, row_label VARCHAR, column_label VARCHAR, change VARCHAR, detail VARCHAR,
+  old_value DOUBLE, new_value DOUBLE, difference DOUBLE, unit VARCHAR, old_status VARCHAR, new_status VARCHAR,
+  from_release VARCHAR, to_release VARCHAR)"))
+for (i in seq_len(nrow(releases))[-1]) {
+  p <- releases$release_fy[i - 1]; q <- releases$release_fy[i]
+  invisible(dbExecute(con, sprintf("CREATE OR REPLACE TEMP TABLE o AS SELECT * FROM archive WHERE first_seen <= %1$d AND last_seen >= %1$d", p)))
+  invisible(dbExecute(con, sprintf("CREATE OR REPLACE TEMP TABLE n AS SELECT * FROM archive WHERE first_seen <= %1$d AND last_seen >= %1$d", q)))
+  if (dbGetQuery(con, "SELECT count(*) AS k FROM o")$k == 0) next
+  invisible(dbExecute(con, "CREATE OR REPLACE TEMP TABLE o_iy AS SELECT DISTINCT year, inst_id, form FROM o"))
+  invisible(dbExecute(con, "CREATE OR REPLACE TEMP TABLE n_iy AS SELECT DISTINCT year, inst_id, form FROM n"))
+  invisible(dbExecute(con, sprintf("
+    INSERT INTO herd_changes
+    SELECT CAST(%1$s AS INTEGER), %2$s, %3$s, %4$s, %5$s, %6$s, %7$s, %8$s, NULLIF(%9$s, ''),
+      CASE WHEN o.row_key IS NULL THEN 'Added' WHEN n.row_key IS NULL THEN 'Removed' ELSE 'Edited' END,
+      CASE
+        WHEN o.row_key IS NULL THEN
+          CASE WHEN NOT EXISTS (SELECT 1 FROM o_iy x WHERE x.year = n.year AND x.inst_id = n.inst_id) THEN 'Institution-year added' ELSE 'Row added' END
+        WHEN n.row_key IS NULL THEN
+          CASE WHEN NOT EXISTS (SELECT 1 FROM n_iy x WHERE x.year = o.year AND x.inst_id = o.inst_id) THEN 'Institution-year removed'
+               WHEN NOT EXISTS (SELECT 1 FROM n_iy x WHERE x.year = o.year AND x.inst_id = o.inst_id AND x.form = o.form) THEN 'Institution-year now on the other form'
+               ELSE 'Row removed' END
+        ELSE 'Changed: ' || %10$s
+      END,
+      TRY_CAST(o.data AS DOUBLE) * %11$s, TRY_CAST(n.data AS DOUBLE) * %11$s,
+      TRY_CAST(n.data AS DOUBLE) * %11$s - TRY_CAST(o.data AS DOUBLE) * %11$s,
+      %12$s, NULLIF(trim(o.status), ''), NULLIF(trim(n.status), ''), %13$s, %14$s
+    FROM o FULL JOIN n USING (row_key)
+    WHERE o.sig IS DISTINCT FROM n.sig
+      -- Only revisions to survey years the earlier release already had; a new survey year is not a change
+      AND CAST(coalesce(n.year, o.year) AS INTEGER) <= %15$d",
+    pick("year"), pick("inst_id"), pick("inst_name_long"), pick("inst_state_code"), pick("form"), pick("questionnaire_no"),
+    pick("question"), pick("row"), pick("column"), changed_cols_sql,
+    herd_scale_sql(pick("questionnaire_no")), herd_unit_sql(pick("questionnaire_no")),
+    DBI::dbQuoteString(con, releases$label[i - 1]), DBI::dbQuoteString(con, releases$label[i]), p)))
+}
+changes <- dbGetQuery(con, "SELECT to_release, change, count(*) AS n FROM herd_changes GROUP BY ALL ORDER BY ALL")
+if (nrow(changes)) message("herd_changes: ", paste(sprintf("%s %s %s", changes$to_release, changes$change, format(changes$n, big.mark = ",")), collapse = "; "))
+
+# HERD survey values from a table of raw rows; extra adds columns from those rows
+facts_sql <- function(src, extra = "") sprintf("
   SELECT
     CAST(year AS INTEGER)        AS year,
     inst_id,
@@ -110,7 +289,7 @@ invisible(dbExecute(con, "
     NULLIF(\"column\", '')       AS column_label,
     TRY_CAST(data AS DOUBLE) * CASE WHEN unit = 'thousands_usd' THEN 1000 ELSE 1 END AS value,
     NULLIF(status, '')           AS status,
-    CASE WHEN unit = 'thousands_usd' THEN 'dollars' ELSE unit END AS unit
+    CASE WHEN unit = 'thousands_usd' THEN 'dollars' ELSE unit END AS unit%s
   FROM (
     SELECT *,
       CASE
@@ -120,12 +299,18 @@ invisible(dbExecute(con, "
         WHEN questionnaire_no = '16'   THEN 'fte'
         ELSE 'thousands_usd'
       END AS unit
-    FROM raw)
-  ORDER BY year, inst_id, question_no
-"))
+    FROM %s)", extra, src)
+invisible(dbExecute(con, paste("CREATE TABLE facts AS", facts_sql("raw"), "ORDER BY year, inst_id, question_no")))
+# Every row NCSES has published and no longer does, in the same shape as facts
+invisible(dbExecute(con, paste("CREATE TABLE herd_removed AS", facts_sql("removed_raw", ",
+    inst_name_long  AS institution,
+    inst_state_code AS state,
+    what_changed,
+    last_seen_label AS last_published_in,
+    missing_since"), "ORDER BY year, institution, question_no, row_label, column_label")))
 
-invisible(dbExecute(con, "
-  CREATE TABLE institutions AS
+# Institution attributes for each year, from a table of raw rows
+institutions_sql <- function(src) sprintf("
   SELECT DISTINCT
     CAST(year AS INTEGER)        AS year,
     inst_id,
@@ -142,9 +327,8 @@ invisible(dbExecute(con, "
     med_sch_flag = 'T'           AS medical_school,
     hhe_flag = '1'               AS high_hispanic_enrollment,
     form
-  FROM raw
-  ORDER BY year, inst_id
-"))
+  FROM %s", src)
+invisible(dbExecute(con, paste("CREATE TABLE institutions AS", institutions_sql("raw"), "ORDER BY year, inst_id")))
 
 dupes <- dbGetQuery(con, "SELECT count(*) AS n FROM (SELECT year, inst_id FROM institutions GROUP BY ALL HAVING count(*) > 1)")$n
 if (dupes > 0) stop(dupes, " institution-years have conflicting attributes; inspect before publishing")
@@ -653,8 +837,7 @@ build_metrics(con)
 # Ranks and shares computed from HERD metrics: computed by HERD Explorer, not published by NCSES.
 # Each measure and year ranks the institutions that reported it; ties share a rank. A measure
 # asked only on the standard form ranks only standard-form institutions.
-invisible(dbExecute(con, "
-  CREATE TABLE herd_ranks AS
+herd_ranks_sql <- "
   SELECT m.year, m.inst_id, m.measure_id,
          CAST(rank() OVER (PARTITION BY m.measure_id, m.year ORDER BY m.value DESC) AS INTEGER)          AS rank_national,
          CAST(count(*) OVER (PARTITION BY m.measure_id, m.year) AS INTEGER)                               AS n_national,
@@ -662,8 +845,33 @@ invisible(dbExecute(con, "
          CAST(count(*) OVER (PARTITION BY m.measure_id, m.year, i.state) AS INTEGER)                      AS n_state,
          m.value / nullif(sum(m.value) OVER (PARTITION BY m.measure_id, m.year), 0)                        AS share_national
   FROM metrics m JOIN institutions i ON i.inst_id = m.inst_id AND i.year = m.year
-  ORDER BY m.measure_id, m.year, rank_national
-"))
+  ORDER BY m.measure_id, m.year, rank_national"
+invisible(dbExecute(con, paste("CREATE TABLE herd_ranks AS", herd_ranks_sql)))
+
+# --- The same tables with the rows NCSES removed ------------------------------------
+# metrics, herd_ranks and institutions again, with herd_removed's rows added back (except rows for
+# institution-years NCSES now has on the other form, which would count those institutions twice).
+# The site's "Include rows NCSES removed" switch reads these. NCSES's published totals leave these
+# rows out, so these tables are not checked against them; the survey's own sums are reported, not enforced.
+for (t in c("facts", "metrics", "institutions", "herd_ranks")) invisible(dbExecute(con, sprintf("ALTER TABLE %1$s RENAME TO %1$s_ncses", t)))
+# A temporary table, so the database does not carry a second copy of every survey value
+invisible(dbExecute(con, "
+  CREATE TEMP TABLE facts AS
+  SELECT * FROM facts_ncses
+  UNION ALL
+  SELECT year, inst_id, form, question_no, question, row_label, column_label, value, status, unit
+  FROM herd_removed WHERE what_changed <> 'Institution-year now on the other form'"))
+invisible(dbExecute(con, paste("CREATE TABLE institutions AS SELECT * FROM institutions_ncses UNION ALL BY NAME",
+  institutions_sql("(SELECT * FROM removed_raw WHERE what_changed = 'Institution-year removed')"))))
+dupes <- dbGetQuery(con, "SELECT count(*) AS n FROM (SELECT year, inst_id FROM institutions GROUP BY ALL HAVING count(*) > 1)")$n
+if (dupes > 0) stop(dupes, " institution-years have conflicting attributes once removed rows are added back")
+build_metrics(con, strict = FALSE)
+invisible(dbExecute(con, paste("CREATE TABLE herd_ranks AS", herd_ranks_sql)))
+for (t in c("metrics", "institutions", "herd_ranks")) invisible(dbExecute(con, sprintf("ALTER TABLE %1$s RENAME TO %1$s_with_removed", t)))
+invisible(dbExecute(con, "DROP TABLE facts"))
+for (t in c("facts", "metrics", "institutions", "herd_ranks")) invisible(dbExecute(con, sprintf("ALTER TABLE %1$s_ncses RENAME TO %1$s", t)))
+removed_n <- dbGetQuery(con, "SELECT count(*) AS n FROM herd_removed")$n
+message(sprintf("herd_removed: %s rows NCSES no longer publishes", format(removed_n, big.mark = ",")))
 
 # What is HERD and what is not: every table's origin, for the site, the Ask page and the downloads
 herd <- "HERD Survey (NCSES)"; computed <- "Computed from HERD by HERD Explorer"; other <- "Not HERD: other publisher"
@@ -674,6 +882,11 @@ table_catalog <- rbind(
   data.frame(table_name = "measure_catalog", origin = herd, description = "Definitions of the HERD measures in metrics"),
   data.frame(table_name = "national_published", origin = herd, description = "National totals from the NCSES HERD data tables"),
   data.frame(table_name = "herd_ranks", origin = computed, description = "National and in-state rank and national share of each HERD measure, by year"),
+  data.frame(table_name = "herd_removed", origin = herd, description = "HERD survey values NCSES published in an earlier release and no longer publishes, with the release each was last published in"),
+  data.frame(table_name = "herd_changes", origin = herd, description = "Every HERD survey value NCSES added, edited or removed between consecutive releases, with the old and new values"),
+  data.frame(table_name = "metrics_with_removed", origin = herd, description = "metrics with the rows in herd_removed added back; NCSES's published totals do not include them"),
+  data.frame(table_name = "institutions_with_removed", origin = herd, description = "institutions plus institution-years NCSES has removed"),
+  data.frame(table_name = "herd_ranks_with_removed", origin = computed, description = "herd_ranks computed from metrics_with_removed"),
   data.frame(table_name = "institution_unitids", origin = computed, description = "The IPEDS ID HERD Explorer uses to link each HERD institution to IPEDS and GSS"),
   data.frame(table_name = "institution_groups", origin = other, description = "Carnegie 2021 sector and 2025 research designation, MSI, HSI, tribal and land-grant flags (Carnegie); ten units labeled by HERD Explorer"),
   data.frame(table_name = "institution_locations", origin = other, description = "Latitude and longitude (IPEDS directory files; some entered by HERD Explorer)"),
@@ -693,14 +906,27 @@ missing_tables <- setdiff(table_catalog$table_name, dbListTables(con))
 if (length(missing_tables)) stop("table_catalog lists tables the build did not write: ", paste(missing_tables, collapse = ", "))
 dbWriteTable(con, "table_catalog", table_catalog)
 build_downloads(con, out_dir, first_year, last_year)
-jsonlite::write_json(c(site_meta(release), built_on = as.character(Sys.Date())),
+invisible(dbExecute(con, sprintf("COPY herd_removed TO '%s' (HEADER)", file.path(out_dir, "downloads", "herd_explorer_removed_rows.csv"))))
+invisible(dbExecute(con, sprintf("COPY herd_changes TO '%s' (HEADER)", file.path(out_dir, "downloads", "herd_explorer_changes.csv"))))
+jsonlite::write_json(c(site_meta(release), built_on = as.character(Sys.Date()), removed_rows = removed_n),
                      file.path(out_dir, "meta.json"), auto_unbox = TRUE, pretty = TRUE)
 message("wrote meta.json")
 
 # Parquet copies for downloads and for anyone who prefers files to a database
-for (t in c("facts", "metrics", "measure_catalog", "herd_ranks", "institutions", "institution_groups", "institution_locations", "institution_unitids", "national_published", "table_catalog",
+for (t in c("facts", "metrics", "measure_catalog", "herd_ranks", "institutions", "herd_removed", "herd_changes", "metrics_with_removed", "herd_ranks_with_removed", "institutions_with_removed", "institution_groups", "institution_locations", "institution_unitids", "national_published", "table_catalog",
            grep("^context_", dbListTables(con), value = TRUE), "sources")) {
   invisible(dbExecute(con, sprintf("COPY %s TO '%s' (FORMAT parquet, COMPRESSION zstd)", t, file.path(out_dir, paste0(t, ".parquet")))))
 }
 invisible(dbExecute(con, "CHECKPOINT"))
 for (f in list.files(out_dir, pattern = "\\.(parquet|duckdb)$", full.names = TRUE)) message(sprintf("wrote %-45s %6.1f MB", basename(f), file.size(f) / 1e6))
+
+# Rewrite the HERD archive (see "Every version of every row NCSES has published" above), now that the build has passed.
+# One Parquet file while it stays well under GitHub's 100 MB file limit; past about 80 MB, split it into
+# hive-partitioned files by year (pipeline/archive/herd_microdata/year=2012/...) and read them with hive_partitioning.
+dir.create(dirname(archive_path), recursive = TRUE, showWarnings = FALSE)
+invisible(dbExecute(con, sprintf("COPY (SELECT * EXCLUDE (row_key, sig) FROM archive ORDER BY year, form, inst_id, questionnaire_no, \"row\", \"column\", first_seen)
+                                  TO '%s' (FORMAT parquet, COMPRESSION zstd)", archive_path)))
+write.csv(releases, releases_path, row.names = FALSE)
+archive_mb <- file.size(archive_path) / 1e6
+message(sprintf("wrote %-45s %6.1f MB", "pipeline/archive/herd_microdata.parquet", archive_mb))
+if (archive_mb > 80) warning("pipeline/archive/herd_microdata.parquet is ", round(archive_mb), " MB, near GitHub's 100 MB file limit; split it by year (see the comment above)")

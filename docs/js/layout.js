@@ -1,6 +1,7 @@
 // Shared header and footer. Every page calls renderLayout(activePage).
 import { fillMeta } from './meta.js';
 import { readKeyFromURL } from './llm.js';
+import { includeRemoved, setIncludeRemoved } from './db.js';
 
 export const REPO = 'https://github.com/nate-layman/herd-explorer';
 export const FORUM = 'https://groups.ai4ra.uidaho.edu/g/main';
@@ -23,13 +24,22 @@ export const DISCLAIMER =
 export function renderLayout(active) {
   // A ?key= link works on any page: the key is kept for this tab and stripped from the address bar
   readKeyFromURL();
+  const on = includeRemoved();
   const nav = PAGES.map(([href, label]) =>
     `<a href="${href}"${href === active ? ' aria-current="page"' : ''}>${label}</a>`).join('');
   document.body.insertAdjacentHTML('afterbegin', `
     <header class="site-header">
       <a class="brand" href="index.html">HERD Explorer</a>
       <nav>${nav}</nav>
-    </header>`);
+    </header>${on ? `
+    <div class="removed-banner" role="status">
+      <p><strong>Including rows NCSES removed.</strong> Figures on every page add back values NCSES published in an earlier
+        release and no longer publishes, so totals will not match NCSES's published tables. Projections use NCSES's current
+        data only. <a href="data.html#removed">See what NCSES removed</a>.</p>
+      <button type="button" id="removed-off">Turn off</button>
+    </div>` : ''}`);
+  // The switch itself is on About HERD (data.html#removed); the banner shows on every page while it is on
+  document.getElementById('removed-off')?.addEventListener('click', () => { setIncludeRemoved(false); location.reload(); });
   document.body.insertAdjacentHTML('beforeend', `
     <footer class="site-footer">
       <p>Data: <a href="https://ncses.nsf.gov/explore-data/microdata/higher-education-research-development">NCSES

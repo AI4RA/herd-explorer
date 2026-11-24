@@ -33,6 +33,17 @@ All figures come from the public, institution-level microdata files that the Nat
 - **Locations**: latitude and longitude come from the IPEDS directory file (HD) for the year closest to each institution's last HERD year. Units HERD reports without an IPEDS ID, and units IPEDS does not list (research institutes, military colleges), are placed by a hand-checked crosswalk from their street address. Locations are used only by the chart builder's map.
 - **Dollars are nominal**, not adjusted for inflation. NCSES publishes HERD in thousands of dollars. HERD Explorer multiplies every dollar value by 1,000 when it builds the data, so the whole site, the database, the downloads and the projections are in whole dollars: $1,234 thousand in an NCSES table is $1,234,000 here. Nothing else about the values changes.
 
+## What NCSES changed (data.html#removed)
+
+Each year NCSES re-posts the microdata for every survey year, and the new files are not always the same as the earlier ones: values are edited, rows are added, and rows are removed. HERD Explorer keeps every version of every value NCSES has published (in pipeline/archive in the source code) and lists every change on About HERD under "What NCSES changed", in the herd_changes table, with the old and new value, the difference, NCSES's status codes, and the releases it happened between. The comparison starts with the FY 2024 release (NSF 26-304).
+
+- The list can be filtered by change (added, edited, removed), year, institution and releases, and shown value by value or rolled up to one row per institution (added, edited and removed counts, years, net edit to total R&D, total R&D removed). Click an institution in the rolled-up view to see its values.
+- Edited and added values: the site always uses NCSES's newest value.
+- Removed values are also in the herd_removed table, with the release each was last published in. By default every figure on the site is NCSES's current files, so national totals match NCSES's published tables.
+- The "Include rows NCSES removed" switch, on About HERD in What NCSES changed (data.html#removed), adds the removed values back into every chart, table, rank and Ask answer on every page, until it is turned off (it is remembered across pages and visits). A banner shows at the top of every page while it is on, with a Turn off button, and every source line says the figures include removed values and will not match NCSES's published tables. Institution-years now on the other form are never added back, since that would count the institution twice in that year.
+- Projections always use NCSES's current data, whether the switch is on or off.
+- Downloads: every change as CSV (herd_explorer_changes.csv) or Parquet (herd_changes.parquet); every removed value as CSV (herd_explorer_removed_rows.csv) or Parquet (herd_removed.parquet).
+
 ## Measures
 
 The About HERD page has a searchable list of every measure with its definition, category, unit and coverage. Categories: Source of funds, Federal agency, Field of research, Field of research (federal), Type of cost, Subawards, Personnel, Other.
@@ -44,6 +55,7 @@ The About HERD page has a searchable list of every measure with its definition, 
 - Every survey value, long format (CSV, zipped, 25 MB)
 - Full database (DuckDB, 45 MB)
 - Measures (Parquet) and survey values (Parquet)
+- Every change NCSES made between releases (CSV), and values NCSES removed (CSV); see What NCSES changed
 
 Any table view built on Explore's Table tab can also be exported as CSV.
 

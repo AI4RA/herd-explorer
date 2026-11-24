@@ -1,7 +1,7 @@
 // Explore's Animate tab: bar races, line races, moving scatter plots and maps that play through the survey years.
 // Options are deliberately few: a short list of measures, bounded counts, and every query returns at most one row
 // per institution, year and measure (about 12,000 rows), so no choice can ask the browser to animate the whole table.
-import { query, lit } from './db.js';
+import { query, lit, removedNote } from './db.js';
 import { plotly, PALETTE, OTHER, BASE_LAYOUT, CONFIG, short, unitAxis } from './charts.js';
 
 // Measures offered for animation, in this order
@@ -589,6 +589,7 @@ function builders(chart, byId, M) {
     parts.push('Motion between years is drawn by the animation; only the year marks are reported values.');
     let src = `Source: NCSES HERD Survey public microdata, ${span}, nominal dollars. Institution type from the 2021 Carnegie Classification.`;
     if (c.type === 'map') src += ' Locations: IPEDS directory files (NCES), not HERD data.';
+    src += removedNote();
     return `${parts.join(' ')} ${src}`;
   }
 

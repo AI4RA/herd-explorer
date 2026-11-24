@@ -61,7 +61,7 @@
   <script type="module">
     import { renderLayout } from './js/layout.js';
     import { meta } from './js/meta.js';
-    import { query, lit } from './js/db.js';
+    import { query, lit, removedNote } from './js/db.js';
     import { plotly, PALETTE, BASE_LAYOUT, CONFIG, short, unitAxis } from './js/charts.js';
     import { fillMeasureSelect, measure } from './js/measures.js';
     import { updateToggle, institutionBands, bandTraces, DISCLAIMER_SHORT } from './js/projections.js';
@@ -197,7 +197,7 @@
       $('note').textContent = `${m.label}: ${m.definition} Covers ${m.coverage.toLowerCase()}. ` +
         `Source: NCSES HERD Survey public microdata, FY ${M.first_year}-${M.last_year}. Nominal dollars. Institution type from the 2021 Carnegie Classification.` +
         (mode === 'faculty' ? ` Divided by ${staff.note} Not HERD data. Counted the November before each fiscal year;` +
-          ` no count for FY ${M.first_year}, and none where HERD and IPEDS do not report the same campus.` : '');
+          ` no count for FY ${M.first_year}, and none where HERD and IPEDS do not report the same campus.` : '') + removedNote();
     }
 
     function update() {

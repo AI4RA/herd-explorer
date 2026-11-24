@@ -98,7 +98,8 @@ for (p in c("Total", "Researchers", "Technicians", "Support Staff")) {
       cell(sprintf("form = 'standard' AND question_no = '16' AND row_label = 'Total' AND column_label = '%s'", p)))
 }
 
-build_metrics <- function(con) {
+# strict = FALSE (the tables with removed rows added back) reports sums that do not add up instead of stopping
+build_metrics <- function(con, strict = TRUE) {
   catalog <- do.call(rbind, lapply(m, function(x) as.data.frame(x[setdiff(names(x), "sql")])))
   if (anyDuplicated(catalog$id)) stop("duplicate measure ids: ", paste(catalog$id[duplicated(catalog$id)], collapse = ", "))
   dbWriteTable(con, "measure_catalog", catalog, overwrite = TRUE)
@@ -118,7 +119,8 @@ build_metrics <- function(con) {
              sum(value) FILTER (WHERE measure_id LIKE 'agency_%')                                     AS agencies
       FROM metrics GROUP BY year)
     SELECT * FROM t WHERE fields IS NULL OR agencies IS NULL OR abs(all_rd - fields) > 500 OR abs(fed_std - agencies) > 500")
-  if (nrow(gaps)) { print(gaps); stop("metrics do not add up; see the years above") }
+  if (nrow(gaps) && strict) { print(gaps); stop("metrics do not add up; see the years above") }
+  if (nrow(gaps)) message("with removed rows added back, fields or agencies differ from the totals by more than $500 in ", paste(gaps$year, collapse = ", "))
   message(sprintf("metrics: %d measures, %s rows", nrow(catalog),
                   format(dbGetQuery(con, "SELECT count(*) AS n FROM metrics")$n, big.mark = ",")))
 }

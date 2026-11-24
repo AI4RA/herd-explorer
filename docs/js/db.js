@@ -3,6 +3,23 @@
 // only the bytes a query needs are downloaded.
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm';
 
+// Rows NCSES published in an earlier release and has since removed from its files are kept in
+// herd_removed. With the "Include rows NCSES removed" switch on (layout.js), every page reads
+// metrics, herd_ranks and institutions from copies that add those rows back. The choice is kept
+// in localStorage, so it holds across pages and visits until it is turned off.
+export const REMOVED_SETTING = 'herd-include-removed';
+export function includeRemoved() {
+  try { return localStorage.getItem(REMOVED_SETTING) === '1'; } catch { return false; }
+}
+export function setIncludeRemoved(on) {
+  try { on ? localStorage.setItem(REMOVED_SETTING, '1') : localStorage.removeItem(REMOVED_SETTING); } catch { /* storage blocked */ }
+}
+// Appended to every source line while the switch is on
+export const removedNote = () => includeRemoved()
+  ? ' Includes values NCSES published earlier and has since removed from its files; these totals will not match NCSES\'s published tables (see About HERD).'
+  : '';
+const WITH_REMOVED = new Set(['metrics', 'herd_ranks', 'institutions']);
+
 const TABLES = [
   // HERD Survey data, and figures computed from it
   'metrics', 'measure_catalog', 'herd_ranks', 'institutions', 'national_published',
@@ -28,7 +45,16 @@ async function init() {
 
   const base = new URL('data/', document.baseURI).href;
   const conn = await db.connect();
+  const withRemoved = includeRemoved();
   for (const t of TABLES) {
+    if (withRemoved && WITH_REMOVED.has(t)) {
+      // Fall back to NCSES's current files if the copy with removed rows is not there
+      try {
+        await db.registerFileURL(`${t}_with_removed.parquet`, `${base}${t}_with_removed.parquet`, duckdb.DuckDBDataProtocol.HTTP, false);
+        await conn.query(`CREATE VIEW ${t} AS SELECT * FROM read_parquet('${t}_with_removed.parquet')`);
+        continue;
+      } catch { /* use the current files below */ }
+    }
     await db.registerFileURL(`${t}.parquet`, `${base}${t}.parquet`, duckdb.DuckDBDataProtocol.HTTP, false);
     await conn.query(`CREATE VIEW ${t} AS SELECT * FROM read_parquet('${t}.parquet')`);
   }
@@ -74,6 +100,13 @@ export async function columns(sql) {
   }
   return out;
 }
+
+// What NCSES changed between releases, and the rows it removed (About HERD, Ask). Loaded on request;
+// resolves to false if the files are not there.
+export const changeTables = () => Promise.all([
+  ensureView('herd_changes', 'herd_changes.parquet'),
+  ensureView('herd_removed', 'herd_removed.parquet'),
+]).then(() => true, () => false);
 
 // Register a Parquet file under docs/data/ as a view the first time it is needed
 const registered = new Map();

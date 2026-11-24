@@ -34,7 +34,7 @@ jobs:
         run: make packages
 
       - name: Build the data and check it against NCSES
-        run: make data
+        run: make data 2>&1 | tee build.log
 
       - name: Backtest, fit and simulate projections
         run: make model 2>&1 | tee model.log
@@ -56,15 +56,22 @@ jobs:
             grep -E "interval widening factor|production model" model.log || true
             echo '```'
             echo
+            echo 'What NCSES changed since the last release, rows kept from the archive, and files read from SAS:'
+            echo '```'
+            grep -E "herd_changes:|kept from the archive|kept it from the archive|reading the SAS file|HERD archive:" build.log || true
+            echo '```'
+            echo
             echo 'Merging this pull request updates the site and runs publish.yml, which refits and uploads the projections to Hugging Face.'
           } > pr-body.md
-          rm model.log
+          rm model.log build.log
 
       - uses: peter-evans/create-pull-request@v7
         with:
           branch: data-refresh
           delete-branch: true
-          add-paths: docs/data
+          add-paths: |
+            docs/data
+            pipeline/archive
           commit-message: "Refresh data from NCSES (release.yml)"
           title: "Data refresh"
           body-path: pr-body.md

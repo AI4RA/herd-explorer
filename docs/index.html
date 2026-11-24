@@ -67,7 +67,7 @@
   <script type="module">
     import { renderLayout } from './js/layout.js';
     import { meta } from './js/meta.js';
-    import { query, lit } from './js/db.js';
+    import { query, lit, removedNote } from './js/db.js';
     import { plotly, PALETTE, OTHER, BASE_LAYOUT, CONFIG, short, unitAxis } from './js/charts.js';
     import { fillMeasureSelect, measure } from './js/measures.js';
     import { updateToggle, groupBands, bandTraces, DISCLAIMER_SHORT } from './js/projections.js';
@@ -158,7 +158,7 @@
       }, CONFIG);
       $('trend-note').textContent = `${m.label}: ${m.definition} Covers ${m.coverage.toLowerCase()}. ` +
         `Source: NCSES HERD Survey public microdata, FY ${M.first_year}-${M.last_year}. Nominal dollars.` +
-        (split === 'sector' ? ' Institution type from the 2021 Carnegie Classification.' : '');
+        (split === 'sector' ? ' Institution type from the 2021 Carnegie Classification.' : '') + removedNote();
     }
 
     async function drawWorkload() {
