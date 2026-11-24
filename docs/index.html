@@ -67,7 +67,8 @@
   <script type="module">
     import { renderLayout } from './js/layout.js';
     import { meta } from './js/meta.js';
-    import { query, lit, removedNote } from './js/db.js';
+    import { query, lit, removedNote, followRemovedSwitch } from './js/db.js';
+    followRemovedSwitch();
     import { plotly, PALETTE, OTHER, BASE_LAYOUT, CONFIG, short, unitAxis } from './js/charts.js';
     import { fillMeasureSelect, measure } from './js/measures.js';
     import { updateToggle, groupBands, bandTraces, DISCLAIMER_SHORT } from './js/projections.js';

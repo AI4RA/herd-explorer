@@ -4,8 +4,9 @@
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm';
 
 // Rows NCSES published in an earlier release and has since removed from its files are kept in
-// herd_removed. With the "Include rows NCSES removed" switch on (layout.js), every page reads
-// metrics, herd_ranks and institutions from copies that add those rows back. The choice is kept
+// herd_removed. With the "Include rows NCSES removed on the Trends and Compare tabs" switch on (About HERD), the
+// pages that follow it (Trends and Compare call followRemovedSwitch) read metrics, herd_ranks and institutions from
+// copies that add those rows back. Every other page uses NCSES's current files. The choice is kept
 // in localStorage, so it holds across pages and visits until it is turned off.
 export const REMOVED_SETTING = 'herd-include-removed';
 export function includeRemoved() {
@@ -14,11 +15,15 @@ export function includeRemoved() {
 export function setIncludeRemoved(on) {
   try { on ? localStorage.setItem(REMOVED_SETTING, '1') : localStorage.removeItem(REMOVED_SETTING); } catch { /* storage blocked */ }
 }
-// Appended to every source line while the switch is on
-export const removedNote = () => includeRemoved()
+// Appended to the source lines on Trends and Compare while the switch is on
+export const removedNote = () => usingRemoved()
   ? ' Includes values NCSES published earlier and has since removed from its files; these totals will not match NCSES\'s published tables (see About HERD).'
   : '';
 const WITH_REMOVED = new Set(['metrics', 'herd_ranks', 'institutions']);
+// Trends and Compare call this before their first query
+let followSwitch = false;
+export function followRemovedSwitch() { followSwitch = true; }
+export const usingRemoved = () => includeRemoved() && followSwitch;
 
 const TABLES = [
   // HERD Survey data, and figures computed from it
@@ -45,7 +50,7 @@ async function init() {
 
   const base = new URL('data/', document.baseURI).href;
   const conn = await db.connect();
-  const withRemoved = includeRemoved();
+  const withRemoved = usingRemoved();
   for (const t of TABLES) {
     if (withRemoved && WITH_REMOVED.has(t)) {
       // Fall back to NCSES's current files if the copy with removed rows is not there

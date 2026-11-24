@@ -36,3 +36,7 @@ Your questions, the description of the data, the query results, and any help doc
 - The model can misread a question or pick the wrong measure; check important numbers in Show the SQL, or on Trends or Compare.
 - Answers cover FY {first_year} to FY {last_year}; questions about the future are pointed to the projections.
 - Answer quality depends on the model behind your key.
+
+## NCSES's current data, and what changed
+
+Ask always answers from NCSES's current data, whatever the "Include rows NCSES removed on the Trends and Compare tabs" switch on About HERD is set to. It can also look at what NCSES changed between releases (herd_changes and herd_removed), and does when you ask about revisions, corrections, removed or added values, or differences from earlier releases.

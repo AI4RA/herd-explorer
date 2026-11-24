@@ -8,7 +8,7 @@ A projection shows where past trends lead if they continue. It does not account 
 
 Fiscal years {projection_first_year} to {projection_last_year}, for each institution, for every dollar measure: total R&D and each source of funds, each federal agency, each field of research, each type of cost, and subawards (51 measures at the last fit; About the model lists them). Personnel is not projected (released only from FY 2022). Any group (a type, a state, public or private, institutions you pick, the nation) is projected by adding up its institutions' simulated futures.
 
-Projections are fit to NCSES's current data only. The "Include rows NCSES removed" switch does not change them.
+Projections are fit to NCSES's current data only. The "Include rows NCSES removed on the Trends and Compare tabs" switch does not change them.
 
 ## Reading the chart
 

@@ -851,7 +851,7 @@ invisible(dbExecute(con, paste("CREATE TABLE herd_ranks AS", herd_ranks_sql)))
 # --- The same tables with the rows NCSES removed ------------------------------------
 # metrics, herd_ranks and institutions again, with herd_removed's rows added back (except rows for
 # institution-years NCSES now has on the other form, which would count those institutions twice).
-# The site's "Include rows NCSES removed" switch reads these. NCSES's published totals leave these
+# The site's "Include rows NCSES removed on the Trends and Compare tabs" switch reads these. NCSES's published totals leave these
 # rows out, so these tables are not checked against them; the survey's own sums are reported, not enforced.
 for (t in c("facts", "metrics", "institutions", "herd_ranks")) invisible(dbExecute(con, sprintf("ALTER TABLE %1$s RENAME TO %1$s_ncses", t)))
 # A temporary table, so the database does not carry a second copy of every survey value

@@ -90,9 +90,12 @@ table.data th { color: var(--muted); }
   .controls label { width: 100%; }
 }
 
-/* "Include rows NCSES removed" switch (About HERD), and the banner every page shows while it is on */
+/* "Include rows NCSES removed on the Trends and Compare tabs" switch (About HERD), and the banner every page shows while it is on */
 .removed-switch { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600; padding: 0.5rem 0.8rem; margin: 0.6rem 0 0.4rem; border: 1px solid var(--line); border-radius: 0.3rem; background: var(--panel); cursor: pointer; }
 .removed-switch input { margin: 0; width: 1.1rem; height: 1.1rem; }
 .removed-banner { display: flex; align-items: center; gap: 1rem; background: #fdf0ec; border-bottom: 1px solid #f3c4b3; border-left: 4px solid var(--accent-2); padding: 0.6rem 1.5rem; font-size: 0.9rem; }
 .removed-banner p { margin: 0; max-width: 70rem; }
 .removed-banner button { flex: none; font: inherit; font-size: 0.85rem; padding: 0.25rem 0.7rem; border: 1px solid #d9a08c; background: #fff; border-radius: 0.3rem; cursor: pointer; }
+.ch-downloads { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.6rem 0 0.2rem; }
+.ch-downloads button, .ch-downloads a.button { font: inherit; font-size: 0.85rem; padding: 0.3rem 0.8rem; border: 1px solid var(--line); border-radius: 0.3rem; background: var(--panel); color: var(--ink); text-decoration: none; cursor: pointer; }
+.ch-downloads button:disabled { opacity: 0.5; cursor: default; }
