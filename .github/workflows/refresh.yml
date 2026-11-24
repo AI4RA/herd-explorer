@@ -1,7 +1,9 @@
-# Rebuild the data and projections and open a pull request with the result.
+# Rebuild the data and projections and push the result to the data-refresh branch.
 # Run it from the Actions tab after editing pipeline/release.yml for a new survey year (see RELEASING.md),
-# or any time to rebuild from the current sources. Nothing is published until the pull request is merged;
-# publish.yml then uploads the projections.
+# or any time to rebuild from the current sources. A person then opens the pull request (the run summary
+# links to it) and merges it; nothing is published until then, and publish.yml then uploads the projections.
+# Pushing a branch needs only contents: write, so the repository does not have to let Actions create
+# pull requests.
 name: Refresh data
 
 on:
@@ -9,7 +11,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
   group: refresh
@@ -65,13 +66,27 @@ jobs:
           } > pr-body.md
           rm model.log build.log
 
-      - uses: peter-evans/create-pull-request@v7
-        with:
-          branch: data-refresh
-          delete-branch: true
-          add-paths: |
-            docs/data
-            pipeline/archive
-          commit-message: "Refresh data from NCSES (release.yml)"
-          title: "Data refresh"
-          body-path: pr-body.md
+      # The branch has one commit whose message is the summary, so GitHub fills in the pull request's
+      # title and description from it when someone opens the pull request
+      - name: Push the results to the data-refresh branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c data-refresh
+          git add docs/data pipeline/archive
+          if git diff --cached --quiet; then
+            echo "No changes to the data; nothing to push." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          last_year=$(jq -r .last_year docs/data/meta.json)
+          { echo "Data refresh: FY $last_year"; echo; cat pr-body.md; } > commit-msg.txt
+          git commit -q -F commit-msg.txt
+          git push -f origin data-refresh
+          url="${{ github.server_url }}/${{ github.repository }}/compare/${{ github.ref_name }}...data-refresh?expand=1"
+          {
+            echo "## Data refresh ready for review"
+            echo
+            echo "The results are on the data-refresh branch. [Open the pull request]($url), review it and merge it to update the site."
+            echo
+            cat pr-body.md
+          } >> "$GITHUB_STEP_SUMMARY"

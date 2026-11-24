@@ -41,6 +41,6 @@ jobs:
           repo="${{ github.server_url }}/${{ github.repository }}"
           printf '%s\n\n%s\n' \
             "NCSES has posted the FY $YEAR HERD microdata." \
-            "Follow [RELEASING.md]($repo/blob/main/RELEASING.md): update \`pipeline/release.yml\`, then run the [Refresh data]($repo/actions/workflows/refresh.yml) workflow and review its pull request." \
+            "Follow [RELEASING.md]($repo/blob/main/RELEASING.md): update \`pipeline/release.yml\`, then run the [Refresh data]($repo/actions/workflows/refresh.yml) workflow, then open, review and merge the pull request from its \`data-refresh\` branch." \
             > body.md
           gh issue create --title "$title" --body-file body.md

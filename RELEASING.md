@@ -23,11 +23,13 @@ Actions tab, **Refresh data**, **Run workflow**. It:
 2. builds `docs/data/`, and stops if any national total differs from what NCSES publishes,
 3. backtests, fits and simulates the projections,
 4. runs every publish check without uploading,
-5. opens a pull request named **Data refresh** with the new `docs/data/`.
+5. pushes the new `docs/data/` and `pipeline/archive/` to the `data-refresh` branch, and puts a link to open the pull request in the run's summary.
 
 Every release re-posts all earlier years too, and the files change: values are edited, rows added and rows removed. The build keeps every version of every row NCSES has published in `pipeline/archive/herd_microdata.parquet` (with `pipeline/archive/releases.csv` naming the releases). The site uses the newest values; rows missing from the new files go to `herd_removed`, which the site can add back with its "Include rows NCSES removed on the Trends, Compare and Explore tabs" switch; and `herd_changes` lists every change, shown on About HERD. The pull request includes the updated archive and lists the changes. If the archive file nears GitHub's 100 MB limit, the build warns: split it into hive-partitioned Parquet files by year. If NCSES's CSV for a year is shorter than the SAS file in the same zip (FY 2020's was cut off in September 2026), the build reads the SAS file and says so.
 
-## 3. Review and merge the pull request
+## 3. Open, review and merge the pull request
+
+Open the pull request yourself: use the link in the Refresh data run's summary, or the **Compare & pull request** banner GitHub shows on the repository page. Its title and description are filled in from the branch.
 
 The pull request lists the years and the projection model the backtest chose. Open the site preview locally if you like (`python3 -m http.server 4173 -d docs`). Merging updates the site, and `publish.yml` then refits the projections (seeded, so identical to the reviewed run) and uploads them to Hugging Face.
 
@@ -54,4 +56,4 @@ make publish    # upload the projections (needs `hf auth login` or HF_TOKEN)
 ## One-time setup for the workflows
 
 - Repository secret `HF_TOKEN`: a Hugging Face token with write access to `n8layman/herd-explorer-projections`.
-- Settings, Actions, General: allow GitHub Actions to create pull requests.
+- Nothing else: Refresh data pushes a branch rather than opening a pull request, so the repository does not need to let GitHub Actions create pull requests.
