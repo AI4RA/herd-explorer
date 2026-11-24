@@ -214,7 +214,8 @@
   <script type="module">
     import { renderLayout } from './js/layout.js';
     import { meta } from './js/meta.js';
-    import { query, columns, removedNote } from './js/db.js';
+    import { query, columns, removedNote, followRemovedSwitch } from './js/db.js';
+    followRemovedSwitch();
     document.getElementById('explore-removed').textContent = removedNote();
 
     renderLayout('explore.html');

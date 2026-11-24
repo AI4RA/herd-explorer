@@ -33,7 +33,7 @@ export function renderLayout(active) {
       <nav>${nav}</nav>
     </header>${on ? `
     <div class="removed-banner" role="status">
-      <p><strong>Including rows NCSES removed on the Trends and Compare tabs.</strong> ${['index.html', 'compare.html'].includes(active)
+      <p><strong>Including rows NCSES removed on the Trends, Compare and Explore tabs.</strong> ${['index.html', 'compare.html', 'explore.html'].includes(active)
         ? 'This page adds back values NCSES published in an earlier release and no longer publishes, so totals will not match NCSES\'s published tables. Projections use NCSES\'s current data only.'
         : 'This page uses NCSES\'s current data.'} <a href="data.html#removed">See what NCSES removed</a>.</p>
       <button type="button" id="removed-off">Turn off</button>

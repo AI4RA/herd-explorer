@@ -4,8 +4,8 @@
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm';
 
 // Rows NCSES published in an earlier release and has since removed from its files are kept in
-// herd_removed. With the "Include rows NCSES removed on the Trends and Compare tabs" switch on (About HERD), the
-// pages that follow it (Trends and Compare call followRemovedSwitch) read metrics, herd_ranks and institutions from
+// herd_removed. With the "Include rows NCSES removed on the Trends, Compare and Explore tabs" switch on (About HERD), the
+// pages that follow it (Trends, Compare and Explore call followRemovedSwitch) read metrics, herd_ranks and institutions from
 // copies that add those rows back. Every other page uses NCSES's current files. The choice is kept
 // in localStorage, so it holds across pages and visits until it is turned off.
 export const REMOVED_SETTING = 'herd-include-removed';
@@ -15,12 +15,12 @@ export function includeRemoved() {
 export function setIncludeRemoved(on) {
   try { on ? localStorage.setItem(REMOVED_SETTING, '1') : localStorage.removeItem(REMOVED_SETTING); } catch { /* storage blocked */ }
 }
-// Appended to the source lines on Trends and Compare while the switch is on
+// Appended to the source lines on Trends, Compare and Explore while the switch is on
 export const removedNote = () => usingRemoved()
   ? ' Includes values NCSES published earlier and has since removed from its files; these totals will not match NCSES\'s published tables (see About HERD).'
   : '';
 const WITH_REMOVED = new Set(['metrics', 'herd_ranks', 'institutions']);
-// Trends and Compare call this before their first query
+// Trends, Compare and Explore call this before their first query
 let followSwitch = false;
 export function followRemovedSwitch() { followSwitch = true; }
 export const usingRemoved = () => includeRemoved() && followSwitch;

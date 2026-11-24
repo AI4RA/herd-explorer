@@ -39,4 +39,4 @@ Your questions, the description of the data, the query results, and any help doc
 
 ## NCSES's current data, and what changed
 
-Ask always answers from NCSES's current data, whatever the "Include rows NCSES removed on the Trends and Compare tabs" switch on About HERD is set to. It can also look at what NCSES changed between releases (herd_changes and herd_removed), and does when you ask about revisions, corrections, removed or added values, or differences from earlier releases.
+Ask always answers from NCSES's current data, whatever the "Include rows NCSES removed on the Trends, Compare and Explore tabs" switch on About HERD is set to. It can also look at what NCSES changed between releases (herd_changes and herd_removed), and does when you ask about revisions, corrections, removed or added values, or differences from earlier releases.

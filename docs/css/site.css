@@ -90,7 +90,7 @@ table.data th { color: var(--muted); }
   .controls label { width: 100%; }
 }
 
-/* "Include rows NCSES removed on the Trends and Compare tabs" switch (About HERD), and the banner every page shows while it is on */
+/* "Include rows NCSES removed on the Trends, Compare and Explore tabs" switch (About HERD), and the banner every page shows while it is on */
 .removed-switch { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600; padding: 0.5rem 0.8rem; margin: 0.6rem 0 0.4rem; border: 1px solid var(--line); border-radius: 0.3rem; background: var(--panel); cursor: pointer; }
 .removed-switch input { margin: 0; width: 1.1rem; height: 1.1rem; }
 .removed-banner { display: flex; align-items: center; gap: 1rem; background: #fdf0ec; border-bottom: 1px solid #f3c4b3; border-left: 4px solid var(--accent-2); padding: 0.6rem 1.5rem; font-size: 0.9rem; }

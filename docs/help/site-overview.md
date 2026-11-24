@@ -14,7 +14,7 @@ HERD Explorer is a browser-based explorer for the NCSES Higher Education Researc
 - **About HERD** (data.html): what the HERD Survey is (who reports, what counts as R&D, timing, history, caveats), then sources, definitions, how the data were put together, downloads. See data-sources.md.
 - **About the model** (model.html): how the projections are made and tested. See projection-model.md.
 
-The **Include rows NCSES removed on the Trends and Compare tabs** switch, on About HERD in What NCSES changed, adds back values NCSES published in an earlier release and no longer publishes, in the charts on the Trends and Compare tabs (Explore, projections and Ask always use NCSES's current data), and a banner shows on every page while it is on; see data-sources.md (What NCSES changed).
+The **Include rows NCSES removed on the Trends, Compare and Explore tabs** switch, on About HERD in What NCSES changed, adds back values NCSES published in an earlier release and no longer publishes, in the charts on the Trends, Compare and Explore tabs (projections and Ask always use NCSES's current data), and a banner shows on every page while it is on; see data-sources.md (What NCSES changed).
 
 The old Pivot page (pivot.html) now redirects to Explore's Table tab.
 
