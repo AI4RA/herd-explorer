@@ -21,9 +21,28 @@ export const DISCLAIMER =
   'provided as is, without warranty of any kind, and are not financial, budget, legal or investment advice. ' +
   'Check figures against the official NCSES tables before relying on them.';
 
+// Visit counts with GoatCounter (https://herd-explorer.goatcounter.com): no cookies, no IP addresses or personal
+// data. It is sent the page's path only, never the query string or anchor, so nothing passed in a link (such as
+// ?key=) reaches it. The script is GoatCounter's versioned count.v5.js, pinned by its hash.
+const GOATCOUNTER = 'https://herd-explorer.goatcounter.com/count';
+const GOATCOUNTER_JS = 'https://gc.zgo.at/count.v5.js';
+const GOATCOUNTER_SRI = 'sha384-atnOLvQb9t+jTSipvd75X2yginT4PjVbqDdlJAmxMm+wYElFmeR6EmLP5bYeoRVQ';
+function countVisit() {
+  window.goatcounter = { path: () => location.pathname };
+  const s = document.createElement('script');
+  s.async = true;
+  s.src = GOATCOUNTER_JS;
+  s.integrity = GOATCOUNTER_SRI;
+  s.crossOrigin = 'anonymous';
+  s.dataset.goatcounter = GOATCOUNTER;
+  document.head.appendChild(s);
+}
+
 export function renderLayout(active) {
   // A ?key= link works on any page: the key is kept for this tab and stripped from the address bar
   readKeyFromURL();
+  // Counted after the key is stripped, and with the path only
+  countVisit();
   const on = includeRemoved();
   const nav = PAGES.map(([href, label]) =>
     `<a href="${href}"${href === active ? ' aria-current="page"' : ''}>${label}</a>`).join('');
@@ -51,6 +70,8 @@ export function renderLayout(active) {
       <p>Tell us what you think, report a data error, or suggest other data or a new feature: join the <a href="${FORUM}">AI4RA Groups.io listserv</a> and reply to the <a href="${FORUM}/search?q=%23DataScience&amp;ct=1">#DataScience</a> thread, or start a new topic with #DataScience in the subject line.</p>
       <p>A project of <a href="https://ai4ra.uidaho.edu">AI4RA</a> at the University of Idaho, funded by the U.S. National Science Foundation
         GRANTED program, award <a href="https://www.nsf.gov/awardsearch/show-award?AWD_ID=2427549">#2427549</a>.</p>
+      <p>We count visits with <a href="https://www.goatcounter.com">GoatCounter</a>, which uses no cookies and stores no IP
+        addresses or personal data, only totals such as page views, browser, country and referring site.</p>
       <p class="disclaimer">${DISCLAIMER}</p>
     </footer>`);
   fillMeta();

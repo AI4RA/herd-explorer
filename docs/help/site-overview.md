@@ -22,6 +22,10 @@ The old Pivot page (pivot.html) now redirects to Explore's Table tab.
 
 To share what you think, report a data error, or suggest other data or a new feature, join the AI4RA Groups.io listserv (https://groups.ai4ra.uidaho.edu/g/main) and reply to the #DataScience thread, or start a new topic with #DataScience in the subject line. For a data error, include the page, the institution or slice, the year, and what you expected to see. New members apply through that page, and a person approves each application. The link is on the Trends page and in every page footer.
 
+## Privacy and visit counts
+
+The site counts visits with GoatCounter, which uses no cookies and stores no IP addresses or personal data, only totals such as page views, browser, country and referring site. It is sent only the page's path, never anything in the link after it (such as a ?key= link's key). API keys for the Ask page stay in the browser tab (sessionStorage); see ask.md.
+
 ## Disclaimer
 
 HERD Explorer is an independent project. It is not an official product of NCSES or the U.S. National Science Foundation, and neither NCSES, NSF nor the University of Idaho endorses it. The data, charts and projections are provided as is, without warranty. They are not financial, budget, legal or investment advice. Check figures against the official NCSES tables before relying on them.
