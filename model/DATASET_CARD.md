@@ -12,7 +12,7 @@ size_categories:
 
 # HERD Explorer projections
 
-Simulated projections of research and development spending at U.S. colleges and universities, FY {{projection_first_year}} to FY {{projection_last_year}}, for every dollar measure in [HERD Explorer](https://nate-layman.github.io/herd-explorer/). The site reads these files directly in the browser.
+Simulated projections of research and development spending at U.S. colleges and universities, FY {{projection_first_year}} to FY {{projection_last_year}}, for every dollar measure in [HERD Explorer](https://ai4ra.github.io/herd-explorer/). The site reads these files directly in the browser.
 
 **A projection shows where past trends lead if they continue.** It does not account for known upcoming changes, such as federal budget or policy shifts, and may not reflect what actually happens. Nor can it see survey revisions or an institution's own plans.
 
@@ -28,7 +28,7 @@ Measure definitions are in the `measure_catalog` table of the HERD Explorer data
 
 ## Method
 
-A hierarchical growth model fit with the R package mgcv: year-to-year growth in log spending, with typical growth by institution type (2021 Carnegie Classification), state and institution random effects, shared year and year-by-type shocks, and noise that depends on institution size. Chosen over a naive baseline and a model of spending levels by rolling backtests. Full description: [About the model](https://nate-layman.github.io/herd-explorer/model.html). Code: [model/fit.R](https://github.com/nate-layman/herd-explorer/blob/main/model/fit.R).
+A hierarchical growth model fit with the R package mgcv: year-to-year growth in log spending, with typical growth by institution type (2021 Carnegie Classification), state and institution random effects, shared year and year-by-type shocks, and noise that depends on institution size. Chosen over a naive baseline and a model of spending levels by rolling backtests. Full description: [About the model](https://ai4ra.github.io/herd-explorer/model.html). Code: [model/fit.R](https://github.com/AI4RA/herd-explorer/blob/main/model/fit.R).
 
 ## Source data
 
@@ -40,6 +40,6 @@ HERD Explorer is an independent project. It is not an official product of NCSES 
 
 ## Citation
 
-Layman, N. HERD Explorer. University of Idaho, [AI4RA](https://ai4ra.uidaho.edu). https://github.com/nate-layman/herd-explorer
+Layman, N. HERD Explorer. University of Idaho, [AI4RA](https://ai4ra.uidaho.edu). https://github.com/AI4RA/herd-explorer
 
 This material is based upon work supported by the U.S. National Science Foundation under the GRANTED program, award [2427549](https://www.nsf.gov/awardsearch/show-award?AWD_ID=2427549).

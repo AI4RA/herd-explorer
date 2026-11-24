@@ -3,7 +3,7 @@ import { fillMeta } from './meta.js';
 import { readKeyFromURL } from './llm.js';
 import { includeRemoved, setIncludeRemoved } from './db.js';
 
-export const REPO = 'https://github.com/nate-layman/herd-explorer';
+export const REPO = 'https://github.com/AI4RA/herd-explorer';
 export const FORUM = 'https://groups.ai4ra.uidaho.edu/g/main';
 
 const PAGES = [

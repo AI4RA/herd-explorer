@@ -73,7 +73,7 @@ bam(dlog ~ sector + s(state, bs = "re") + s(inst, bs = "re") + s(fyear, bs = "re
 - One key box, routed by prefix, as in Promptulus: `mr2_` to MindRouter through the lakehouse proxy, `sk-ant-` to Claude, other `sk-` to OpenAI, anything else to Gemini.
 - A `?key=` URL parameter is read once and stripped from the address bar. Keys live in sessionStorage only.
 - The model returns SQL and a JSON chart spec. SQL runs read-only against the local DuckDB-WASM tables; chart specs are validated before rendering. No eval.
-- The proxy allowlists origins one at a time. `https://nate-layman.github.io` is already allowed (preflight checked 2026-10-27).
+- The proxy allowlists origins one at a time. `https://nate-layman.github.io` was allowed (preflight checked 2026-10-27). The site moved to `https://ai4ra.github.io` on 2026-11-24, which needs to be allowed too.
 
 ## Phases
 
